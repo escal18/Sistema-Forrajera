@@ -1,0 +1,327 @@
+/* ==========================================
+   VARIABLES DE TEMA (Paleta Profesional)
+   ========================================== */
+:root {
+    --primary: #2563eb;         /* Azul moderno */
+    --primary-hover: #1d4ed8;
+    --secondary: #475569;       /* Gris oscuro para botones secundarios */
+    --secondary-hover: #334155;
+    --success: #16a34a;         /* Verde para dinero/éxito */
+    --danger: #ef4444;          /* Rojo para eliminar/errores */
+    --bg-app: #f1f5f9;          /* Fondo general más suave */
+    --bg-card: #ffffff;         /* Fondo de paneles */
+    --text-main: #0f172a;       /* Texto principal casi negro */
+    --text-muted: #64748b;      /* Texto secundario gris */
+    --border-color: #e2e8f0;
+    --radius: 12px;             /* Bordes más redondeados y modernos */
+    --shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.1);
+    --shadow-hover: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.1);
+}
+
+/* ==========================================
+   ESTILOS BASE
+   ========================================== */
+* {
+    box-sizing: border-box;
+    font-family: 'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif;
+}
+
+body {
+    margin: 0;
+    padding: 20px;
+    background-color: var(--bg-app);
+    color: var(--text-main);
+}
+
+/* Scrollbar personalizado para las tablas */
+::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+::-webkit-scrollbar-track {
+    background: #f1f1f1; 
+    border-radius: 4px;
+}
+::-webkit-scrollbar-thumb {
+    background: #c1c1c1; 
+    border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+    background: #a8a8a8; 
+}
+
+/* ==========================================
+   CAJERO (PUNTO DE VENTA)
+   ========================================== */
+.contenedor-principal {
+    display: flex;
+    gap: 24px;
+    height: 92vh;
+}
+
+.panel-izquierdo, .panel-derecho {
+    background: var(--bg-card);
+    padding: 24px;
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    display: flex;
+    flex-direction: column;
+}
+
+.panel-izquierdo {
+    flex: 7;
+}
+
+.panel-derecho {
+    flex: 3;
+    justify-content: space-between;
+    border-top: 4px solid var(--primary); /* Acento visual superior */
+}
+
+/* Buscador e Inputs */
+#input-buscador, .campo input, .campo select, #pago-con {
+    width: 100%;
+    padding: 12px 16px;
+    font-size: 1.1rem;
+    color: var(--text-main);
+    background-color: #f8fafc;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    transition: all 0.2s ease;
+    outline: none;
+}
+
+#input-buscador:focus, .campo input:focus, .campo select:focus, #pago-con:focus {
+    border-color: var(--primary);
+    background-color: #ffffff;
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.2); /* Anillo de enfoque moderno */
+}
+
+.input-cantidad {
+    width: 90px;
+    padding: 8px;
+    font-size: 1rem;
+    text-align: center;
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    margin-right: 8px;
+    outline: none;
+    transition: border-color 0.2s;
+}
+
+.input-cantidad:focus {
+    border-color: var(--primary);
+}
+
+/* Tabla del Ticket */
+#tabla-ticket {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+    margin-top: 20px;
+}
+
+#tabla-ticket th {
+    background-color: #f8fafc;
+    color: var(--text-muted);
+    font-weight: 600;
+    padding: 12px;
+    text-align: left;
+    border-bottom: 2px solid var(--border-color);
+    text-transform: uppercase;
+    font-size: 0.85rem;
+    letter-spacing: 0.5px;
+}
+
+#tabla-ticket td {
+    padding: 14px 12px;
+    border-bottom: 1px solid var(--border-color);
+    vertical-align: middle;
+}
+
+#tabla-ticket tbody tr:hover {
+    background-color: #f8fafc;
+}
+
+/* Totales y Textos */
+.display-total {
+    font-size: 3.5rem;
+    font-weight: 800;
+    color: var(--success);
+    text-align: center;
+    margin: 20px 0;
+    letter-spacing: -1px;
+}
+
+/* Botones */
+.btn-principal, .btn-secundario {
+    width: 100%;
+    padding: 16px;
+    font-size: 1.1rem;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+    transition: all 0.2s ease;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.btn-principal {
+    background-color: var(--primary);
+    color: white;
+    box-shadow: 0 4px 14px 0 rgba(37, 99, 235, 0.39);
+}
+
+.btn-principal:hover {
+    background-color: var(--primary-hover);
+    transform: translateY(-1px);
+    box-shadow: 0 6px 20px rgba(37, 99, 235, 0.23);
+}
+
+.btn-principal:disabled {
+    background-color: #94a3b8;
+    cursor: not-allowed;
+    box-shadow: none;
+    transform: none;
+}
+
+.btn-secundario {
+    background-color: var(--secondary);
+    color: white;
+}
+
+.btn-secundario:hover {
+    background-color: var(--secondary-hover);
+}
+
+.oculto {
+    display: none !important;
+}
+
+/* ==========================================
+   PANEL DE ADMINISTRACIÓN
+   ========================================== */
+.header-admin {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background-color: var(--text-main);
+    color: white;
+    padding: 20px 40px;
+    margin: -20px -20px 30px -20px;
+    box-shadow: var(--shadow);
+}
+
+.header-admin h1 {
+    margin: 0;
+    font-size: 1.5rem;
+    font-weight: 600;
+}
+
+.link-volver {
+    color: #cbd5e1;
+    text-decoration: none;
+    font-weight: 500;
+    padding: 8px 16px;
+    border-radius: 6px;
+    transition: background 0.2s;
+}
+
+.link-volver:hover {
+    background-color: rgba(255,255,255,0.1);
+    color: white;
+}
+
+.contenedor-admin {
+    max-width: 1200px;
+    margin: 0 auto;
+}
+
+.tarjeta-admin {
+    background: var(--bg-card);
+    padding: 24px;
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    margin-bottom: 24px;
+}
+
+.tarjeta-admin h2 {
+    margin-top: 0;
+    color: var(--text-main);
+    font-size: 1.25rem;
+    border-bottom: 2px solid var(--border-color);
+    padding-bottom: 12px;
+    margin-bottom: 20px;
+}
+
+.info-corte {
+    display: flex;
+    align-items: center;
+    gap: 40px;
+}
+
+.dato span {
+    color: var(--text-muted);
+    font-size: 0.9rem;
+    text-transform: uppercase;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+}
+
+.dato h3 {
+    margin: 8px 0 0 0;
+    font-size: 2.2rem;
+    color: var(--text-main);
+}
+
+.grid-inventario {
+    display: grid;
+    grid-template-columns: 1fr 2fr;
+    gap: 24px;
+}
+
+.campo {
+    margin-bottom: 16px;
+}
+
+.campo label {
+    display: block;
+    margin-bottom: 6px;
+    font-weight: 600;
+    color: var(--text-muted);
+    font-size: 0.9rem;
+}
+
+/* Tabla del Administrador */
+#tabla-admin, #tabla-reportes {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+}
+
+#tabla-admin th, #tabla-reportes th {
+    background-color: #f8fafc;
+    color: var(--text-muted);
+    padding: 12px 16px;
+    text-align: left;
+    position: sticky;
+    top: 0;
+    font-size: 0.85rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    z-index: 10;
+    border-bottom: 2px solid var(--border-color);
+}
+
+#tabla-admin td, #tabla-reportes td {
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border-color);
+    vertical-align: middle;
+}
+
+#tabla-admin tbody tr:hover, #tabla-reportes tbody tr:hover {
+    background-color: #f8fafc;
+}

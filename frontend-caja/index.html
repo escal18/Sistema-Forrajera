@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Caja de Cobro - Forrajera</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+    <div class="contenedor-principal">
+
+        <!-- Panel Izquierdo: Buscador y Ticket -->
+        <div class="panel-izquierdo">
+            <div class="seccion-buscador">
+                <input type="text" id="input-buscador" placeholder="Buscar producto por nombre o código (ej. Maíz)..."
+                    autocomplete="off">
+                <ul id="lista-resultados" class="oculto"></ul>
+            </div>
+
+            <div class="seccion-ticket">
+                <table id="tabla-ticket">
+                    <thead>
+                        <tr>
+                            <th>Producto</th>
+                            <th>Cantidad</th>
+                            <th>Precio Unit.</th>
+                            <th>Subtotal</th>
+                            <th>Acción</th>
+                        </tr>
+                    </thead>
+                    <tbody id="cuerpo-ticket">
+                        <!-- Los artículos agregados aparecerán aquí mediante JS -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Panel Derecho: Totales y Botón de Cobro -->
+        <div class="panel-derecho">
+            <h2>Total a Pagar</h2>
+            <div class="display-total">
+                $<span id="total-venta">0.00</span>
+            </div>
+
+            <div class="opciones-pago">
+                <label for="metodo-pago">Método de Pago:</label>
+                <select id="metodo-pago">
+                    <option value="Efectivo">Efectivo</option>
+                    <option value="Tarjeta">Tarjeta</option>
+                </select>
+            </div>
+
+            <!-- NUEVO BLOQUE: Cálculo de cambio -->
+            <div class="calculo-cambio" style="background: #f9f9f9; padding: 15px; border-radius: 4px; margin: 15px 0;">
+                <label style="display: block; font-weight: bold; margin-bottom: 5px;">Pago con:</label>
+                <input type="number" id="pago-con" step="0.50" min="0" placeholder="$0.00" style="width: 100%; padding: 10px; font-size: 1.2rem; margin-bottom: 10px;">
+                
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <span style="font-weight: bold; color: #555;">Cambio:</span>
+                    <h3 style="margin: 0; color: #d32f2f; font-size: 1.8rem;">$<span id="cambio-venta">0.00</span></h3>
+                </div>
+            </div>
+
+            <button id="btn-cobrar" class="btn-principal">Cobrar e Imprimir</button>
+        </div>
+
+    </div>
+
+    <script src="app.js"></script>
+</body>
+
+</html>
