@@ -4,28 +4,25 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Administración - Forrajera</title>
+    <title>Administracion - Forrajera</title>
     <link rel="stylesheet" href="style.css">
 </head>
 
 <body>
     <div class="header-admin">
-        <h1>Panel de Administración</h1>
+        <h1>Panel de Administracion</h1>
         <a href="index.html" class="link-volver">Volver a la Caja</a>
     </div>
 
     <div class="contenedor-admin">
 
-        <!-- SECCIÓN 1: CORTE Y VENTAS DEL DÍA -->
         <div class="grid-inventario" style="margin-bottom: 20px;">
 
-            <!-- Tarjeta de Corte de Caja -->
             <div class="tarjeta-admin dashboard-caja">
                 <h2>Corte de Caja</h2>
 
                 <div class="campo" style="margin-top: 15px;">
                     <label>Fondo inicial en caja ($)</label>
-                    <!-- Al escribir aquí, se sumará automáticamente al total esperado -->
                     <input type="number" id="fondo-caja" value="0" step="0.50"
                         style="font-size: 1.2rem; font-weight: bold; color: #2980b9;">
                 </div>
@@ -49,7 +46,6 @@
                     Datos</button>
             </div>
 
-            <!-- Tarjeta de Historial de Tickets -->
             <div class="tarjeta-admin">
                 <h2>Tickets Emitidos Hoy</h2>
                 <div style="overflow-y: auto; max-height: 350px;">
@@ -63,7 +59,6 @@
                             </tr>
                         </thead>
                         <tbody id="cuerpo-ventas">
-                            <!-- Los tickets aparecerán aquí -->
                         </tbody>
                     </table>
                 </div>
@@ -135,7 +130,7 @@
 
         <!-- SECCIÓN 3: REPORTES HISTÓRICOS -->
         <div class="tarjeta-admin" style="margin-top: 20px;">
-            <h2>Reporte Histórico de Ventas</h2>
+            <h2>Reporte Historico de Ventas</h2>
 
             <!-- Buscador por fechas -->
             <div style="display: flex; gap: 15px; margin-bottom: 20px; align-items: flex-end;">
