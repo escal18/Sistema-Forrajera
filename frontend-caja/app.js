@@ -1,255 +1,166 @@
-// URLs de nuestra API local
-const API_PRODUCTOS = 'http://localhost:3000/api/productos';
-const API_VENTAS = 'http://localhost:3000/api/ventas';
-
-// Aquí guardaremos los artículos que el cajero vaya agregando
-let ticketActual = [];
-
-// Referencias a elementos del DOM
-const inputBuscador = document.getElementById('input-buscador');
-const cuerpoTicket = document.getElementById('cuerpo-ticket');
-const displayTotal = document.getElementById('total-venta');
-const btnCobrar = document.getElementById('btn-cobrar');
-const btnCorte = document.getElementById('btn-corte');
-
-// ==========================================
-// 1. Buscador de Productos en Tiempo Real
-// ==========================================
-
-// Escuchar cada vez que el cajero teclea algo
-inputBuscador.addEventListener('input', async (e) => {
-    const textoBusqueda = e.target.value;
-    const listaResultados = document.getElementById('lista-resultados');
-
-    // Si borran el texto, ocultamos la lista
-    if (textoBusqueda.trim() === '') {
-        listaResultados.classList.add('oculto');
-        return;
-    }
-
-    try {
-        // Hacemos la petición a nuestra API en Node.js
-        const respuesta = await fetch(`${API_PRODUCTOS}?buscar=${textoBusqueda}`);
-        const productos = await respuesta.json();
-
-        mostrarResultadosBuscador(productos);
-    } catch (error) {
-        console.error("Error al conectar con la API:", error);
-    }
-});
-
-// Función para dibujar la lista de resultados debajo del input
-function mostrarResultadosBuscador(productos) {
-    const listaResultados = document.getElementById('lista-resultados');
-    listaResultados.innerHTML = ''; // Limpiar búsqueda anterior
-
-    if (productos.length === 0) {
-        listaResultados.classList.add('oculto');
-        return;
-    }
-
-    // Mostrar el contenedor de la lista
-    listaResultados.classList.remove('oculto');
-    listaResultados.style.listStyle = "none";
-    listaResultados.style.padding = "0";
-    listaResultados.style.margin = "0";
-    listaResultados.style.border = "1px solid #ccc";
-    listaResultados.style.maxHeight = "200px";
-    listaResultados.style.overflowY = "auto";
-
-    // Crear una fila por cada producto encontrado en Postgres
-    productos.forEach(producto => {
-        const li = document.createElement('li');
-        li.textContent = `[${producto.codigo_interno}] ${producto.nombre} - $${producto.precio} / ${producto.unidad_medida}`;
-        
-        // Estilos para que parezca un botón clickeable
-        li.style.padding = "10px";
-        li.style.borderBottom = "1px solid #eee";
-        li.style.cursor = "pointer";
-        li.style.backgroundColor = "white";
-
-        // Efecto hover simple
-        li.onmouseover = () => li.style.backgroundColor = "#f0f8ff";
-        li.onmouseout = () => li.style.backgroundColor = "white";
-
-        // ¿Qué pasa al hacer clic en un producto?
-        li.addEventListener('click', () => {
-            agregarAlTicket(producto); // Agregamos a la tabla
-            inputBuscador.value = ''; // Limpiamos la barra de búsqueda
-            listaResultados.classList.add('oculto'); // Escondemos la lista
-        });
-
-        listaResultados.appendChild(li);
-    });
-} 
-
-// ==========================================
-// 2. Lógica del Ticket y Totales
-// ==========================================
-
-function agregarAlTicket(producto) {
-    // Revisar si el producto ya está en el ticket
-    const productoExistente = ticketActual.find(item => item.id_producto === producto.id_producto);
-
-    if (productoExistente) {
-        // Si ya existe, le sumamos 1 a la cantidad
-        productoExistente.cantidad += 1;
-    } else {
-        // Si es nuevo, lo agregamos al arreglo con cantidad 1
-        ticketActual.push({
-            id_producto: producto.id_producto,
-            codigo_interno: producto.codigo_interno,
-            nombre: producto.nombre,
-            unidad_medida: producto.unidad_medida,
-            precio: parseFloat(producto.precio),
-            cantidad: 1
-        });
-    }
-
-    renderizarTicket();
-}
-
-function renderizarTicket() {
-    cuerpoTicket.innerHTML = ''; // Limpiamos la tabla antes de redibujar
-    let total = 0;
-
-    ticketActual.forEach((articulo, index) => {
-        const subtotal = articulo.cantidad * articulo.precio;
-        total += subtotal;
-
-        const tr = document.createElement('tr');
-
-        tr.innerHTML = `
-            <td>
-                <strong>${articulo.codigo_interno}</strong><br>
-                <small>${articulo.nombre}</small>
-            </td>
-            <td>
-                <!-- Input tipo number que permite decimales (step="0.001") -->
-                <input type="number" 
-                       value="${articulo.cantidad}" 
-                       step="0.001" 
-                       min="0.001"
-                       class="input-cantidad"
-                       onchange="actualizarCantidad(${index}, this.value)">
-                <small>${articulo.unidad_medida}</small>
-            </td>
-            <td>$${articulo.precio.toFixed(2)}</td>
-            <td><strong>$${subtotal.toFixed(2)}</strong></td>
-            <td>
-                <button onclick="eliminarArticulo(${index})" style="color: red; cursor: pointer;">X</button>
-            </td>
-        `;
-
-        cuerpoTicket.appendChild(tr);
-    });
-
-    // Actualizamos el número grande del panel derecho
-    displayTotal.textContent = total.toFixed(2);
-}
-
-// Función que se ejecuta cuando el cajero cambia el número en la casilla de cantidad
-function actualizarCantidad(index, nuevaCantidad) {
-    const cantidadParseada = parseFloat(nuevaCantidad);
-    
-    if (cantidadParseada > 0) {
-        ticketActual[index].cantidad = cantidadParseada;
-    } else {
-        ticketActual[index].cantidad = 1; // Prevenir cantidades negativas o cero
-    }
-    
-    renderizarTicket(); // Redibujar para actualizar los subtotales
-}
-
-// Función para el botón rojo de eliminar (X)
-function eliminarArticulo(index) {
-    ticketActual.splice(index, 1); // Quita el elemento del arreglo
-    renderizarTicket();
-}
-
-// ==========================================
-// 3. Procesar la Venta (Enviar al Backend)
-// ==========================================
-
-btnCobrar.addEventListener('click', async () => {
-    // 1. Validar que haya artículos en el ticket
-    if (ticketActual.length === 0) {
-        alert('El ticket está vacío. Agrega productos antes de cobrar.');
-        return;
-    }
-
-    // 2. Preparar los datos tal como los espera nuestra API
-    const metodoPago = document.getElementById('metodo-pago').value;
-    
-    // Transformamos nuestro arreglo del ticket al formato exacto que pide el backend
-    const datosVenta = {
-        metodo_pago: metodoPago,
-        id_usuario: null, // Lo dejamos en null por ahora, listo para cuando agregues login
-        articulos: ticketActual.map(articulo => {
-            return {
-                id_producto: articulo.id_producto,
-                cantidad: articulo.cantidad
-            };
-        })
-    };
-
-    // Deshabilitar el botón temporalmente para evitar dobles cobros si el cajero da doble clic
-    btnCobrar.disabled = true;
-    btnCobrar.textContent = 'Procesando...';
-
-    try {
-        // 3. Enviar la petición POST al servidor
-        const respuesta = await fetch(API_VENTAS, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify(datosVenta)
-        });
-
-        const resultado = await respuesta.json();
-
-        // 4. Evaluar la respuesta del servidor
-        if (respuesta.ok) {
-            // Éxito: Mostramos el mensaje y el folio
-            alert(`¡${resultado.mensaje}!\nFolio del ticket: ${resultado.ticket.folio}\nTotal cobrado: $${resultado.ticket.total}`);
-            
-            // Limpiamos la pantalla dejándola lista para el siguiente cliente
-            ticketActual = [];
-            renderizarTicket();
-            document.getElementById('input-buscador').focus(); // Regresamos el cursor al buscador
-            inputPagoCon.value = '';
-            displayCambio.textContent = '0.00';
-        } else {
-            // Error del backend (ej. no hay stock suficiente de un producto)
-            alert(`Venta rechazada: ${resultado.error}`);
+'use strict';
+(async () => {
+  let products = [], cart = [], shift = null, lastSale = null, ready = false;
+  const $ = F.$;
+  let draftKey, receiptKey;
+  const hasPendingSale = () => ready && F.pending().some(p => p.name === 'venta');
+  const lineCents = a => Math.round(Math.round(a.precio * 100) * Math.round(a.cantidad * 1000) / 1000);
+  const totalCents = () => cart.reduce((sum, a) => sum + lineCents(a), 0);
+  function unit(product, name) {
+    return name === product.unidad_medida ? { nombre: name, factor: 1, precio: Number(product.precio) } : (product.presentaciones || []).find(p => p.nombre === name);
+  }
+  function saveDraft() { if (draftKey) localStorage.setItem(draftKey, JSON.stringify(cart)); }
+  function drawCart() {
+    const locked = hasPendingSale();
+    F.table($('cuerpo-ticket'), cart, [
+      a => {
+        const wrap = document.createElement('div'), label = document.createElement('strong');
+        label.textContent = a.nombre; wrap.append(label);
+        const select = document.createElement('select'); select.setAttribute('aria-label', `Presentación de ${a.nombre}`); select.disabled = locked;
+        const p = products.find(p => p.id_producto === a.id_producto);
+        if (p) for (const u of [{ nombre: p.unidad_medida, factor: 1, precio: p.precio }, ...p.presentaciones]) {
+          const opt = document.createElement('option'); opt.value = u.nombre; opt.textContent = `${u.nombre}${u.factor !== 1 ? ` (${F.qty(u.factor)} ${p.unidad_medida})` : ''}`; select.append(opt);
         }
-
-    } catch (error) {
-        console.error('Error de red al cobrar:', error);
-        alert('Error de comunicación con el servidor. Revisa que el backend esté corriendo.');
-    } finally {
-        // Volvemos a habilitar el botón sin importar si hubo éxito o error
-        btnCobrar.disabled = false;
-        btnCobrar.textContent = 'Cobrar e Imprimir';
+        select.value = a.presentacion;
+        select.onchange = () => { const u = unit(p, select.value); a.presentacion = u.nombre; a.factor = u.factor; a.precio = Number(u.precio); saveDraft(); drawCart(); };
+        wrap.append(select); return wrap;
+      },
+      a => {
+        const input = document.createElement('input'); input.type = 'number'; input.min = '0.001'; input.max = '10000000'; input.step = '0.001'; input.value = a.cantidad; input.disabled = locked; input.setAttribute('aria-label', `Cantidad de ${a.nombre}`);
+        input.onchange = () => {
+          const q = Number(input.value);
+          if (!Number.isFinite(q) || q <= 0 || Math.abs(q * 1000 - Math.round(q * 1000)) > 0.00001) { F.message('Escribe una cantidad positiva con hasta 3 decimales.'); input.value = a.cantidad; return; }
+          a.cantidad = q; saveDraft(); drawCart();
+        }; return input;
+      },
+      a => F.money(a.precio), a => F.money(lineCents(a) / 100),
+      a => { const b = F.button('Quitar', () => { cart.splice(cart.indexOf(a), 1); saveDraft(); drawCart(); }, 'danger'); b.disabled = locked; return b; }
+    ], 'Busca un producto para comenzar la venta.');
+    $('total-venta').textContent = F.money(totalCents() / 100);
+    $('btn-cobrar').disabled = !cart.length || !shift || locked;
+    $('vaciar').disabled = locked;
+    $('metodo-pago').disabled = locked; $('pago-con').disabled = locked;
+    drawChange();
+  }
+  function drawChange() {
+    const cash = $('metodo-pago').value === 'Efectivo';
+    $('campo-pago').hidden = !cash;
+    $('pago-con').required = cash;
+    $('cambio-venta').textContent = F.money(cash ? Math.max(0, Math.round(Number($('pago-con').value || 0) * 100) - totalCents()) / 100 : 0);
+  }
+  function add(product) {
+    if (hasPendingSale()) return F.message('Primero confirma la venta pendiente.');
+    if (Number(product.stock) <= 0) return F.message('Este producto no tiene existencias.');
+    const old = cart.find(a => a.id_producto === product.id_producto && a.presentacion === product.unidad_medida);
+    if (old) old.cantidad = Math.round((old.cantidad + 1) * 1000) / 1000;
+    else cart.push({ id_producto: product.id_producto, nombre: product.nombre, presentacion: product.unidad_medida, factor: 1, precio: Number(product.precio), cantidad: 1 });
+    $('input-buscador').value = ''; search(); saveDraft(); drawCart(); $('input-buscador').focus();
+  }
+  function search() {
+    const term = $('input-buscador').value.trim().toLocaleLowerCase('es');
+    $('lista-resultados').replaceChildren();
+    if (!term) { $('estado-busqueda').textContent = ''; return; }
+    const matches = products.filter(p => `${p.nombre} ${p.codigo_interno}`.toLocaleLowerCase('es').includes(term));
+    $('estado-busqueda').textContent = matches.length ? `${matches.length} coincidencia(s)` : 'No se encontraron productos.';
+    for (const p of matches.slice(0, 12)) {
+      const b = F.button('', () => add(p), 'result');
+      const name = document.createElement('span'), price = document.createElement('span');
+      const title = document.createElement('strong'); title.textContent = `${p.nombre} · ${p.codigo_interno}`;
+      const detail = document.createElement('small'); detail.textContent = `Disponible: ${F.qty(p.stock)} ${p.unidad_medida}`;
+      name.append(title, detail); price.textContent = F.money(p.precio); b.append(name, price); b.disabled = Number(p.stock) <= 0 || hasPendingSale();
+      $('lista-resultados').append(b);
     }
-});
-
-// ==========================================
-// 4. Cálculo de Cambio
-// ==========================================
-const inputPagoCon = document.getElementById('pago-con');
-const displayCambio = document.getElementById('cambio-venta');
-
-inputPagoCon.addEventListener('input', () => {
-    // Obtenemos el total actual leyendo el texto del display y convirtiéndolo a número
-    const totalActual = parseFloat(displayTotal.textContent);
-    const pagoCon = parseFloat(inputPagoCon.value) || 0;
-
-    let cambio = pagoCon - totalActual;
-    
-    // Si el cambio es negativo (aún no completa), mostramos 0
-    if (cambio < 0) cambio = 0;
-
-    displayCambio.textContent = cambio.toFixed(2);
-});
+  }
+  async function loadProducts() {
+    products = await F.api('/productos');
+    $('favoritos').replaceChildren();
+    const favorites = products.filter(p => p.favorito);
+    if (!favorites.length) $('favoritos').textContent = 'El administrador puede marcar los productos frecuentes desde Inventario.';
+    for (const p of favorites.slice(0, 12)) $('favoritos').append(F.button(p.nombre, () => add(p)));
+    const oldCart = cart;
+    cart = oldCart.flatMap(a => {
+      const p = products.find(p => p.id_producto === a.id_producto), u = p && unit(p, a.presentacion);
+      if (!u) return [];
+      return [{ ...a, nombre: p.nombre, precio: Number(u.precio), factor: u.factor }];
+    });
+    if (oldCart.length !== cart.length) F.message('Se quitaron renglones que ya no existen en el catálogo. Revisa el ticket.');
+    search(); drawCart(); saveDraft();
+  }
+  async function loadShift() {
+    shift = await F.api('/turnos/actual');
+    $('abrir-turno').hidden = !!shift; $('turno-abierto').hidden = !shift;
+    if (shift) {
+      $('turno-nombre').textContent = `${shift.nombre} · desde ${F.date(shift.fecha_apertura)}`;
+      $('resumen-turno').innerHTML = [
+        ['Fondo inicial', F.money(shift.fondo_centavos / 100)], ['Ventas netas en efectivo', F.money(shift.efectivo_centavos / 100)],
+        ['Ventas netas con tarjeta', F.money(shift.tarjeta_centavos / 100)], ['Efectivo esperado', F.money((shift.fondo_centavos + shift.efectivo_centavos) / 100)], ['Tickets', shift.tickets_emitidos]
+      ].map(([label, value]) => `<div class="stat"><small>${F.escape(label)}</small><strong>${F.escape(value)}</strong></div>`).join('');
+    }
+    drawCart(); drawDifference();
+  }
+  function drawDifference() {
+    const input = $('form-cierre').elements.contado;
+    $('diferencia-cierre').textContent = shift && input.value !== '' ? `Diferencia: ${F.money((Math.round(Number(input.value) * 100) - shift.fondo_centavos - shift.efectivo_centavos) / 100)}. Las ventas con tarjeta no forman parte del efectivo contado.` : '';
+  }
+  function showSale(sale) {
+    lastSale = sale; localStorage.setItem(receiptKey, JSON.stringify(sale));
+    F.receipt(sale); $('ultima-venta').hidden = false;
+    $('ultimo-folio').textContent = sale.folio;
+    $('ultimo-total').textContent = `Total: ${F.money(sale.total)} · Cambio: ${F.money(sale.cambio)}`;
+  }
+  async function saleConfirmed(sale) {
+    cart = []; saveDraft(); $('pago-con').value = ''; showSale(sale); drawCart();
+    F.message(`Venta confirmada por ${F.money(sale.total)}. Cambio: ${F.money(sale.cambio)}.`, 'ok');
+    await Promise.all([loadShift(), loadProducts()]); $('input-buscador').focus();
+  }
+  try {
+    const user = await F.requireUser(); if (!user) return;
+    draftKey = `forrajera:${user.id_usuario}:borrador`; receiptKey = `forrajera:${user.id_usuario}:ultimo-ticket`;
+    try { cart = JSON.parse(localStorage.getItem(draftKey) || '[]'); if (!Array.isArray(cart)) cart = []; } catch { cart = []; }
+    ready = true;
+    await Promise.all([loadProducts(), loadShift()]);
+    try { const saved = JSON.parse(localStorage.getItem(receiptKey) || 'null'); if (saved) showSale(saved); } catch { /* No hay ticket recuperable. */ }
+    $('input-buscador').oninput = search;
+    $('input-buscador').onkeydown = event => { if (event.key === 'Enter') { event.preventDefault(); $('lista-resultados').querySelector('button:not(:disabled)')?.click(); } };
+    $('actualizar').onclick = async () => { try { await Promise.all([loadProducts(), loadShift()]); F.message('Catálogo y turno actualizados.', 'ok'); } catch (e) { F.message(e.message); } };
+    $('metodo-pago').onchange = drawChange; $('pago-con').oninput = drawChange;
+    $('vaciar').onclick = () => { if (cart.length && confirm('¿Vaciar la venta actual?')) { cart = []; saveDraft(); drawCart(); } };
+    $('form-apertura').onsubmit = event => {
+      event.preventDefault(); const form = event.currentTarget;
+      F.busy(form, async () => { await F.operation('apertura', '/turnos', { nombre: form.elements.nombre.value, fondo_inicial: form.elements.fondo.value }, 'Apertura de turno'); await loadShift(); F.message('Turno abierto.', 'ok'); });
+    };
+    $('form-cierre').elements.contado.oninput = drawDifference;
+    $('form-cierre').onsubmit = event => {
+      event.preventDefault(); const form = event.currentTarget;
+      if (!shift || hasPendingSale()) return F.message('Confirma las ventas pendientes antes de cerrar el turno.');
+      if (!confirm('¿Confirmas el efectivo contado y el cierre de tu turno?')) return;
+      F.busy(form, async () => {
+        const closed = await F.operation('cierre', `/turnos/${shift.id}/cerrar`, { efectivo_contado: form.elements.contado.value, observaciones: form.elements.observaciones.value }, 'Cierre de turno');
+        form.reset(); await loadShift(); F.message(`Turno cerrado. Diferencia: ${F.money(closed.diferencia_centavos / 100)}.`, 'ok');
+      });
+    };
+    $('form-cobro').onsubmit = event => {
+      event.preventDefault(); const form = event.currentTarget;
+      if (!shift || !cart.length || hasPendingSale()) return;
+      const body = { metodo_pago: $('metodo-pago').value, pago_con: $('pago-con').value, total_esperado: totalCents() / 100, articulos: cart.map(a => ({ id_producto: a.id_producto, presentacion: a.presentacion, cantidad: a.cantidad })) };
+      F.busy(form, async () => { const sale = await F.operation('venta', '/ventas', body, 'Cobro de venta'); await saleConfirmed(sale); }).finally(drawCart);
+    };
+    $('imprimir').onclick = () => { if (lastSale) { F.receipt(lastSale); window.print(); } };
+    $('consultar-mis-ventas').onclick = async () => {
+      try {
+        const sales = await F.api('/mis-ventas');
+        F.table($('mis-ventas'), sales, [s => `${s.folio} · ${F.date(s.fecha_hora)}`, s => s.metodo_pago, s => F.money(s.total), s => s.estado, s => F.button('Reimprimir', () => { F.receipt(s); window.print(); })]);
+      } catch (error) { F.message(error.message); }
+    };
+    document.addEventListener('pendientes-cambiaron', () => { drawCart(); search(); });
+    document.addEventListener('operacion-confirmada', event => {
+      const { record, result } = event.detail;
+      (record.name === 'venta' ? saleConfirmed(result) : loadShift()).catch(error => F.message(error.message));
+    });
+    window.addEventListener('storage', () => { F.renderPending(); });
+    document.addEventListener('keydown', event => {
+      if (event.key === 'F2') { event.preventDefault(); $('input-buscador').focus(); }
+      if (event.key === 'F4') { event.preventDefault(); if (!$('btn-cobrar').disabled) $('form-cobro').requestSubmit(); }
+    });
+  } catch (error) { F.message(error.message); }
+})();

@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="es">
+
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Entrar · Forrajera</title>
+    <link rel="stylesheet" href="style.css">
+    <script defer src="common.js"></script>
+    <script defer src="login.js"></script>
+</head>
+
+<body class="login">
+    <main class="login-card">
+        <div class="marca">F<span>Forrajera</span></div>
+        <p class="eyebrow">INVENTARIO Y CAJA</p>
+        <h1 id="titulo">Bienvenido</h1>
+        <p id="instrucciones" class="muted">Ingresa con tu cuenta para comenzar.</p>
+        <div id="mensaje" role="alert" hidden></div>
+        <form id="form-login"><label id="campo-nombre" hidden>Nombre completo<input name="nombre" maxlength="80"
+                    autocomplete="name"></label><label>Usuario<input name="usuario" required
+                    pattern="[a-zA-Z0-9._-]{3,40}" minlength="3" maxlength="40" autocomplete="username"
+                    autofocus></label><label>Contraseña<input name="password" required type="password" maxlength="128"
+                    autocomplete="current-password"></label><button class="primary" type="submit"
+                id="entrar">Entrar</button></form>
+        <p class="muted small">Cada venta y movimiento queda asociado a su responsable.</p>
+    </main>
+</body>
+
+</html>

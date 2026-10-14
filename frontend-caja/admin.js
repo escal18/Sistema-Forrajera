@@ -1,346 +1,171 @@
-const API_PRODUCTOS = 'http://localhost:3000/api/productos';
-const API_CORTES = 'http://localhost:3000/api/cortes/hoy';
-
-// Al cargar la página, inicializamos los datos y recuperamos el fondo del turno
-document.addEventListener('DOMContentLoaded', () => {
-    // 1. Recuperar el fondo inicial guardado (Opción A: persiste para el turno/día)
-    if (localStorage.getItem('fondo_inicial')) {
-        document.getElementById('fondo-caja').value = localStorage.getItem('fondo_inicial');
+'use strict';
+(async () => {
+  const $ = F.$;
+  let products = [], suppliers = [], users = [], report = null, returnId = null;
+  const formProduct = $('form-producto'), formUser = $('form-usuario');
+  const fields = form => Object.fromEntries(new FormData(form));
+  function csv(name, rows) {
+    const content = '\uFEFF' + rows.map(row => row.map(value => {
+      let text = String(value ?? '');
+      if (typeof value === 'string' && /^[=+@\-\t\r]/.test(text)) text = "'" + text;
+      return '"' + text.replaceAll('"', '""') + '"';
+    }).join(',')).join('\r\n');
+    const url = URL.createObjectURL(new Blob([content], { type: 'text/csv;charset=utf-8' }));
+    const a = document.createElement('a'); a.href = url; a.download = name; a.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+  function tab(name) {
+    document.querySelectorAll('[data-tab]').forEach(b => b.setAttribute('aria-selected', String(b.dataset.tab === name)));
+    document.querySelectorAll('[data-panel]').forEach(p => { p.hidden = p.dataset.panel !== name; });
+    history.replaceState(null, '', '#' + name);
+  }
+  function addPresentation(p = {}) {
+    if ($('presentaciones').children.length >= 12) return F.message('Puedes agregar hasta 12 presentaciones.');
+    const row = document.createElement('div'); row.className = 'unit-row';
+    for (const [key, label, type, value] of [['nombre', 'Nombre', 'text', p.nombre || ''], ['factor', 'Equivalencia base', 'number', p.factor || ''], ['precio', 'Precio por presentación', 'number', p.precio ?? '']]) {
+      const lab = document.createElement('label'); lab.textContent = label;
+      const input = document.createElement('input'); input.dataset.field = key; input.type = type; input.value = value; input.required = true;
+      if (type === 'number') { input.min = key === 'factor' ? '0.001' : '0'; input.max = '10000000'; input.step = key === 'factor' ? '0.001' : '0.01'; } else input.maxLength = 40;
+      lab.append(input); row.append(lab);
     }
-
-    cargarCatalogo();
-    actualizarCorte();
-    cargarHistorialVentas();
-    cargarHistorialCortes();
-
-    // Sincronización automática cada 5 segundos (Polling eficiente)
-    setInterval(() => {
-        cargarCatalogo();
-        actualizarCorte();
-        cargarHistorialVentas();
-    }, 5000);
-});
-
-// ==========================================
-// 1. Lógica del Corte de Caja y Fondo Inicial
-// ==========================================
-const btnGenerarCorte = document.getElementById('btn-generar-corte');
-const inputFondoCaja = document.getElementById('fondo-caja');
-
-btnGenerarCorte.addEventListener('click', () => {
-    actualizarCorte();
-    cargarHistorialVentas();
-    alert('Datos actualizados manualmente.');
-});
-
-// Guardar automáticamente el fondo en el navegador cada vez que se modifique
-inputFondoCaja.addEventListener('input', (e) => {
-    localStorage.setItem('fondo_inicial', e.target.value);
-    calcularTotalCajon();
-});
-
-// Variable global para guardar cuánto se vendió realmente en el turno
-let totalVentasDia = 0; 
-
-async function actualizarCorte() {
-    try {
-        const respuesta = await fetch(API_CORTES);
-        const corte = await respuesta.json();
-
-        document.getElementById('admin-tickets').textContent = corte.tickets_emitidos;
-        
-        // Guardamos las ventas netas del turno actual y las mostramos
-        totalVentasDia = parseFloat(corte.total_esperado);
-        document.getElementById('admin-ventas').textContent = `$${totalVentasDia.toFixed(2)}`;
-
-        // Calculamos la suma final (Fondo + Ventas)
-        calcularTotalCajon();
-    } catch (error) {
-        console.error('Error al obtener el corte:', error);
+    row.append(F.button('Quitar', () => row.remove(), 'danger')); $('presentaciones').append(row);
+  }
+  function resetProduct() {
+    formProduct.reset(); formProduct.elements.id.value = ''; formProduct.elements.stock.readOnly = false; formProduct.elements.unidad_medida.readOnly = false;
+    $('presentaciones').replaceChildren(); $('titulo-producto').textContent = 'Nuevo producto';
+  }
+  function editProduct(p) {
+    resetProduct();
+    for (const key of ['codigo_interno', 'nombre', 'unidad_medida', 'precio', 'costo', 'stock', 'stock_minimo']) formProduct.elements[key].value = p[key] ?? '';
+    formProduct.elements.id.value = p.id_producto; formProduct.elements.favorito.checked = !!p.favorito;
+    formProduct.elements.stock.readOnly = true; formProduct.elements.unidad_medida.readOnly = true;
+    for (const unit of p.presentaciones) addPresentation(unit);
+    $('titulo-producto').textContent = `Editar: ${p.nombre}`; $('editor-producto').scrollIntoView({ behavior: 'smooth' });
+  }
+  function drawProducts() {
+    const term = $('filtro-productos').value.trim().toLocaleLowerCase('es');
+    const rows = products.filter(p => `${p.nombre} ${p.codigo_interno}`.toLocaleLowerCase('es').includes(term) && (!$('solo-bajos').checked || Number(p.stock) <= Number(p.stock_minimo)));
+    F.table($('catalogo'), rows, [p => p.codigo_interno, p => `${p.favorito ? '★ ' : ''}${p.nombre} · ${p.unidad_medida}`, p => F.money(p.precio), p => F.money(p.costo), p => {
+      const s = document.createElement('span'); s.textContent = F.qty(p.stock); s.className = Number(p.stock) <= Number(p.stock_minimo) ? 'low' : ''; return s;
+    }, p => F.qty(p.stock_minimo), p => F.button('Editar', () => editProduct(p))]);
+    const low = products.filter(p => Number(p.stock) <= Number(p.stock_minimo));
+    const unknown = products.filter(p => p.costo == null);
+    const value = products.reduce((sum, p) => sum + (p.costo == null ? 0 : Number(p.costo) * Number(p.stock)), 0);
+    $('stats-inventario').innerHTML = [['Productos', products.length], ['Con existencias bajas', low.length], ['Valor a costo conocido', F.money(value)], ['Sin costo registrado', unknown.length]].map(([label, v]) => `<div class="stat"><small>${F.escape(label)}</small><strong>${F.escape(v)}</strong></div>`).join('');
+  }
+  function productOptions() {
+    document.querySelectorAll('.select-productos').forEach(select => {
+      const selected = select.value; select.replaceChildren();
+      const first = document.createElement('option'); first.value = ''; first.textContent = select.id === 'filtro-movimientos' ? 'Todos los productos' : 'Selecciona un producto'; select.append(first);
+      for (const p of products) { const option = document.createElement('option'); option.value = p.id_producto; option.textContent = `${p.codigo_interno} · ${p.nombre} (${p.unidad_medida})`; select.append(option); }
+      select.value = selected;
+    });
+    unitHints();
+  }
+  function unitHints() {
+    for (const [formId, output] of [['form-compra', 'compra-unidad'], ['form-movimiento', 'ajuste-unidad']]) {
+      const p = products.find(p => p.id_producto === $(formId).elements.id_producto.value);
+      $(output).textContent = p ? `Unidad base: ${p.unidad_medida}. Existencia actual: ${F.qty(p.stock)}. ${p.costo == null ? 'Falta registrar el costo base.' : `Costo promedio: ${F.money(p.costo)}.`}` : 'Selecciona un producto para ver su unidad base y existencia.';
     }
-}
-
-function calcularTotalCajon() {
-    const fondo = parseFloat(inputFondoCaja.value) || 0;
-    const totalEsperado = totalVentasDia + fondo;
-    document.getElementById('admin-total-cajon').textContent = `$${totalEsperado.toFixed(2)}`;
-}
-
-// ==========================================
-// 2. Lógica del Catálogo (CRUD)
-// ==========================================
-async function cargarCatalogo() {
-    try {
-        const respuesta = await fetch(API_PRODUCTOS);
-        const productos = await respuesta.json();
-        
-        const cuerpoCatalogo = document.getElementById('cuerpo-catalogo');
-        cuerpoCatalogo.innerHTML = '';
-
-        productos.forEach(prod => {
-            const tr = document.createElement('tr');
-            tr.innerHTML = `
-                <td><strong>${prod.codigo_interno}</strong></td>
-                <td>${prod.nombre} <br><small>${prod.unidad_medida}</small></td>
-                <td>$${parseFloat(prod.precio).toFixed(2)}</td>
-                <td>
-                    <span style="color: ${prod.stock < 5 ? 'red' : 'black'}; font-weight: bold;">
-                        ${parseFloat(prod.stock).toFixed(3)}
-                    </span>
-                </td>
-                <td>
-                    <button class="btn-editar" style="padding: 5px 10px; background-color: #f39c12; color: white; border: none; border-radius: 3px; cursor: pointer;">
-                        Editar
-                    </button>
-                </td>
-            `;
-            
-            const btnEditar = tr.querySelector('.btn-editar');
-            btnEditar.addEventListener('click', () => cargarDatosEnFormulario(prod));
-
-            cuerpoCatalogo.appendChild(tr);
-        });
-
-    } catch (error) {
-        console.error('Error al cargar catálogo:', error);
-    }
-}
-
-// ==========================================
-// 3. Alta y Edición de Productos
-// ==========================================
-const formProducto = document.getElementById('form-producto');
-const inputId = document.getElementById('prod-id');
-const btnGuardarProd = document.getElementById('btn-guardar-prod');
-const btnCancelarEdicion = document.getElementById('btn-cancelar-edicion');
-
-function cargarDatosEnFormulario(producto) {
-    inputId.value = producto.id_producto;
-    document.getElementById('prod-codigo').value = producto.codigo_interno;
-    document.getElementById('prod-nombre').value = producto.nombre;
-    document.getElementById('prod-unidad').value = producto.unidad_medida;
-    document.getElementById('prod-precio').value = producto.precio;
-    document.getElementById('prod-stock').value = producto.stock;
-
-    btnGuardarProd.textContent = 'Actualizar Producto';
-    btnGuardarProd.style.backgroundColor = '#f39c12';
-    btnCancelarEdicion.classList.remove('oculto');
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-}
-
-function resetearFormulario() {
-    formProducto.reset();
-    inputId.value = '';
-    btnGuardarProd.textContent = 'Guardar Producto';
-    btnGuardarProd.style.backgroundColor = '#1976d2';
-    btnCancelarEdicion.classList.add('oculto');
-}
-
-btnCancelarEdicion.addEventListener('click', resetearFormulario);
-
-formProducto.addEventListener('submit', async (e) => {
-    e.preventDefault(); 
-
-    const datosProducto = {
-        codigo_interno: document.getElementById('prod-codigo').value.toUpperCase(),
-        nombre: document.getElementById('prod-nombre').value,
-        unidad_medida: document.getElementById('prod-unidad').value,
-        precio: parseFloat(document.getElementById('prod-precio').value),
-        stock: parseFloat(document.getElementById('prod-stock').value)
+  }
+  async function loadProducts() { products = await F.api('/productos'); drawProducts(); productOptions(); }
+  async function loadSuppliers() {
+    suppliers = await F.api('/proveedores');
+    const select = $('compra-proveedor'), selected = select.value; select.replaceChildren();
+    const first = document.createElement('option'); first.value = ''; first.textContent = 'Selecciona un proveedor'; select.append(first);
+    for (const s of suppliers) { const option = document.createElement('option'); option.value = s.id; option.textContent = s.nombre; select.append(option); }
+    select.value = selected;
+    F.table($('proveedores'), suppliers, [s => s.nombre, s => s.contacto]);
+  }
+  async function loadPurchases() {
+    F.table($('compras'), await F.api('/compras'), [p => `${F.date(p.fecha_hora)} · ${p.nombre_usuario}`, p => p.producto, p => `${p.proveedor} · ${p.referencia}`, p => `${F.qty(p.cantidad)} ${p.unidad_medida}`, p => F.money(p.costo_unitario), p => F.money(p.total)]);
+  }
+  async function loadMovements() {
+    const id = $('filtro-movimientos').value;
+    F.table($('movimientos'), await F.api('/movimientos' + (id ? `?id_producto=${encodeURIComponent(id)}` : '')), [m => F.date(m.fecha_hora), m => m.producto, m => m.tipo, m => `${F.qty(m.cantidad)} ${m.unidad_medida}`, m => `${F.qty(m.stock_anterior)} → ${F.qty(m.stock_nuevo)}`, m => m.nombre_usuario || m.usuario, m => m.motivo]);
+  }
+  async function loadReport() {
+    const form = $('form-reporte');
+    report = await F.api(`/reportes?inicio=${encodeURIComponent(form.elements.inicio.value)}&fin=${encodeURIComponent(form.elements.fin.value)}`);
+    $('stats-reporte').innerHTML = [['Ventas brutas', F.money(report.ventas_brutas)], ['Reembolsos', F.money(report.devoluciones)], ['Ventas netas', F.money(report.ventas_netas)], ['Utilidad bruta', F.money(report.utilidad)], ['Efectivo neto', F.money(report.efectivo)], ['Tarjeta neta', F.money(report.tarjeta)]].map(([label, v]) => `<div class="stat"><small>${F.escape(label)}</small><strong>${F.escape(v)}</strong></div>`).join('');
+    $('aviso-costos').hidden = !report.operaciones_sin_costo;
+    $('aviso-costos').textContent = `${report.operaciones_sin_costo} operación(es) no tienen costo histórico. La utilidad del periodo no se puede determinar con esos datos. Registrar un costo hoy no cambia las ventas anteriores.`;
+    F.table($('ranking'), report.mas_vendidos, [p => p.nombre, p => `${F.qty(p.cantidad)} ${p.unidad_medida}`, p => F.money(p.importe)]);
+    F.table($('reembolsos'), report.reembolsos, [r => `${F.date(r.fecha_hora)} · ${r.folio}`, r => F.money(r.total), r => r.motivo]);
+    F.table($('ventas'), report.ventas, [s => `${s.folio || s.id} · ${F.date(s.fecha_hora)}`, s => s.nombre_usuario || 'Venta anterior', s => s.metodo_pago, s => F.money(s.total), s => F.money(s.utilidad), s => s.estado || 'Registro anterior', s => {
+      const wrap = document.createElement('div'); wrap.className = 'actions';
+      if (s.folio) wrap.append(F.button('Ticket', () => { F.receipt(s); window.print(); }));
+      if (s.folio && s.estado !== 'devuelta') wrap.append(F.button('Devolver', () => { returnId = s.id; $('devolucion-folio').textContent = `${s.folio} · ${F.money(s.total)}`; $('form-devolucion').reset(); $('dialog-devolucion').showModal(); }, 'danger'));
+      return wrap;
+    }]);
+  }
+  async function loadShifts() {
+    F.table($('turnos'), await F.api('/turnos'), [s => `${s.nombre} · ${s.nombre_usuario}`, s => `${F.date(s.fecha_apertura)} / ${F.date(s.fecha_cierre)}`, s => s.estado, s => s.tickets_emitidos, s => F.money(s.fondo_centavos / 100), s => F.money(s.efectivo_centavos / 100), s => F.money(s.tarjeta_centavos / 100), s => F.money((s.fondo_centavos + s.efectivo_centavos) / 100), s => s.contado_centavos == null ? '—' : F.money(s.contado_centavos / 100), s => s.diferencia_centavos == null ? '—' : F.money(s.diferencia_centavos / 100)]);
+    F.table($('cortes-anteriores'), await F.api('/cortes/anteriores'), [s => F.date(s.fecha_corte), s => s.turno, s => F.money(s.ventas_dia), s => F.money(s.total_esperado)]);
+  }
+  function resetUser() {
+    formUser.reset(); formUser.elements.id.value = ''; formUser.elements.usuario.readOnly = false; formUser.elements.password.required = true; $('titulo-usuario').textContent = 'Nuevo usuario';
+  }
+  async function loadUsers() {
+    users = await F.api('/usuarios');
+    F.table($('usuarios'), users, [u => `${u.nombre} · ${u.usuario}`, u => u.rol, u => u.activo ? 'Activo' : 'Inactivo', u => F.button('Editar', () => {
+      resetUser(); formUser.elements.id.value = u.id_usuario; formUser.elements.usuario.value = u.usuario; formUser.elements.usuario.readOnly = true; formUser.elements.nombre.value = u.nombre; formUser.elements.rol.value = u.rol; formUser.elements.activo.checked = u.activo; formUser.elements.password.required = false; $('titulo-usuario').textContent = `Editar: ${u.nombre}`;
+    })]);
+  }
+  const loaders = { inventario: loadProducts, compras: async () => { await loadProducts(); await Promise.all([loadSuppliers(), loadPurchases()]); }, movimientos: async () => { await loadProducts(); await loadMovements(); }, reportes: loadReport, turnos: loadShifts, usuarios: loadUsers };
+  async function reload() { const name = document.querySelector('[data-tab][aria-selected="true"]').dataset.tab; await loaders[name](); }
+  try {
+    const user = await F.requireUser(true); if (!user) return;
+    $('form-reporte').elements.inicio.value = F.today(); $('form-reporte').elements.fin.value = F.today();
+    resetUser();
+    document.querySelectorAll('[data-tab]').forEach(b => { b.onclick = async () => { tab(b.dataset.tab); try { await reload(); } catch (e) { F.message(e.message); } }; });
+    const initial = location.hash.slice(1); if (loaders[initial]) tab(initial);
+    $('actualizar').onclick = () => reload().then(() => F.message('Datos actualizados.', 'ok')).catch(e => F.message(e.message));
+    $('filtro-productos').oninput = drawProducts; $('solo-bajos').onchange = drawProducts;
+    $('agregar-presentacion').onclick = () => addPresentation(); $('cancelar-producto').onclick = resetProduct;
+    formProduct.onsubmit = event => {
+      event.preventDefault();
+      F.busy(formProduct, async () => {
+        const body = fields(formProduct), id = body.id; delete body.id;
+        if (id) delete body.stock;
+        body.favorito = formProduct.elements.favorito.checked;
+        body.presentaciones = [...$('presentaciones').children].map(row => Object.fromEntries([...row.querySelectorAll('input')].map(input => [input.dataset.field, input.value])));
+        await F.api('/productos' + (id ? '/' + encodeURIComponent(id) : ''), { method: id ? 'PUT' : 'POST', body });
+        resetProduct(); await loadProducts(); F.message('Producto guardado.', 'ok');
+      });
     };
-
-    const idEdicion = inputId.value;
-    const metodoHttp = idEdicion ? 'PUT' : 'POST';
-    const urlEndpoint = idEdicion ? `${API_PRODUCTOS}/${idEdicion}` : API_PRODUCTOS;
-
-    try {
-        const respuesta = await fetch(urlEndpoint, {
-            method: metodoHttp,
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(datosProducto)
-        });
-
-        if (respuesta.ok) {
-            alert(idEdicion ? 'Producto actualizado correctamente' : 'Producto agregado exitosamente');
-            resetearFormulario();
-            cargarCatalogo();
-        } else {
-            const error = await respuesta.json();
-            alert(`Error: ${error.error}`);
-        }
-    } catch (error) {
-        console.error('Error al guardar/actualizar:', error);
-        alert('Hubo un problema de conexión con el servidor.');
-    }
-});
-
-// ==========================================
-// 4. Cargar Historial de Ventas
-// ==========================================
-async function cargarHistorialVentas() {
-    try {
-        const respuesta = await fetch('http://localhost:3000/api/ventas/hoy/detalle');
-        const ventas = await respuesta.json();
-        
-        const cuerpoVentas = document.getElementById('cuerpo-ventas');
-        cuerpoVentas.innerHTML = '';
-
-        ventas.forEach(venta => {
-            const horaVenta = new Date(venta.fecha_hora).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-            
-            const tr = document.createElement('tr');
-            tr.innerHTML = `
-                <td><strong>#${venta.id_venta}</strong></td>
-                <td>${horaVenta}</td>
-                <td>${venta.metodo_pago}</td>
-                <td style="color: #27ae60; font-weight: bold;">$${parseFloat(venta.total).toFixed(2)}</td>
-            `;
-            cuerpoVentas.appendChild(tr);
-        });
-
-    } catch (error) {
-        console.error('Error al cargar historial de ventas:', error);
-    }
-}
-
-// ==========================================
-// 5. Lógica de Reportes Históricos
-// ==========================================
-const btnBuscarReporte = document.getElementById('btn-buscar-reporte');
-
-btnBuscarReporte.addEventListener('click', async () => {
-    const inicio = document.getElementById('fecha-inicio').value;
-    const fin = document.getElementById('fecha-fin').value;
-
-    if (!inicio || !fin) {
-        alert('Por favor selecciona ambas fechas para buscar.');
-        return;
-    }
-
-    try {
-        const respuesta = await fetch(`http://localhost:3000/api/ventas/reportes?inicio=${inicio}&fin=${fin}`);
-        const ventas = await respuesta.json();
-        
-        const cuerpoReportes = document.getElementById('cuerpo-reportes');
-        cuerpoReportes.innerHTML = '';
-        let totalPeriodo = 0;
-
-        if (ventas.length === 0) {
-            cuerpoReportes.innerHTML = `
-                <tr>
-                    <td colspan="4" style="text-align: center; padding: 20px; color: #e74c3c;">
-                        No se encontraron ventas entre el ${inicio} y el ${fin}.
-                    </td>
-                </tr>`;
-            document.getElementById('total-reporte').textContent = '$0.00';
-            return;
-        }
-
-        ventas.forEach(venta => {
-            totalPeriodo += parseFloat(venta.total);
-            const fechaCompleta = new Date(venta.fecha_hora).toLocaleString();
-            
-            const tr = document.createElement('tr');
-            tr.innerHTML = `
-                <td style="padding: 10px; border-bottom: 1px solid #ecf0f1;"><strong>#${venta.id_venta}</strong></td>
-                <td style="padding: 10px; border-bottom: 1px solid #ecf0f1;">${fechaCompleta}</td>
-                <td style="padding: 10px; border-bottom: 1px solid #ecf0f1;">${venta.metodo_pago}</td>
-                <td style="padding: 10px; border-bottom: 1px solid #ecf0f1; text-align: right; color: #27ae60; font-weight: bold;">
-                    $${parseFloat(venta.total).toFixed(2)}
-                </td>
-            `;
-            cuerpoReportes.appendChild(tr);
-        });
-
-        document.getElementById('total-reporte').textContent = `$${totalPeriodo.toFixed(2)}`;
-
-    } catch (error) {
-        console.error('Error al buscar reporte:', error);
-        alert('Hubo un problema al generar el reporte.');
-    }
-});
-
-// ==========================================
-// 6. Lógica para Guardar Turno y Ver Historial
-// ==========================================
-const btnGuardarCorte = document.getElementById('btn-guardar-corte');
-
-btnGuardarCorte.addEventListener('click', async () => {
-    const fondo = parseFloat(document.getElementById('fondo-caja').value) || 0;
-    const tickets = document.getElementById('admin-tickets').textContent;
-    const ventas = totalVentasDia; 
-    const totalCajon = ventas + fondo;
-
-    if (ventas === 0) {
-        alert('No hay ventas registradas en este turno para cortar.');
-        return;
-    }
-
-    const turnoActual = prompt('¿Qué turno estás cerrando? (Ej. Turno Mañana, Turno Tarde):', 'Turno Mañana');
-    if (!turnoActual) return;
-
-    if (!confirm(`¿Cerrar ${turnoActual} con ventas por $${ventas.toFixed(2)} y dejar la caja lista para el siguiente turno?`)) {
-        return;
-    }
-
-    try {
-        const respuesta = await fetch('http://localhost:3000/api/cortes', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                fondo_inicial: fondo,
-                ventas_dia: ventas,
-                total_esperado: totalCajon,
-                tickets_emitidos: parseInt(tickets),
-                turno: turnoActual
-            })
-        });
-
-        if (respuesta.ok) {
-            alert(`¡${turnoActual} guardado con éxito! La pantalla se ha reiniciado para el siguiente turno.`);
-            
-            // Reiniciamos los contadores visuales locales
-            totalVentasDia = 0;
-            document.getElementById('admin-ventas').textContent = '$0.00';
-            document.getElementById('admin-tickets').textContent = '0';
-            calcularTotalCajon();
-            
-            cargarHistorialCortes();
-        } else {
-            alert('Error al guardar el corte de turno.');
-        }
-    } catch (error) {
-        console.error('Error:', error);
-        alert('Error de conexión con el servidor.');
-    }
-});
-
-async function cargarHistorialCortes() {
-    try {
-        const respuesta = await fetch('http://localhost:3000/api/cortes/historial');
-        const historial = await respuesta.json();
-        
-        const cuerpo = document.getElementById('cuerpo-historial-cortes');
-        cuerpo.innerHTML = '';
-
-        if (historial.length === 0) {
-            cuerpo.innerHTML = `<tr><td colspan="5" style="text-align: center; padding: 15px; color: #7f8c8d;">No hay cortes guardados todavía.</td></tr>`;
-            return;
-        }
-
-        historial.forEach(corte => {
-            const fechaFormateada = new Date(corte.fecha).toLocaleDateString();
-            const tr = document.createElement('tr');
-            tr.innerHTML = `
-                <td style="padding: 10px; border-bottom: 1px solid #ecf0f1;"><strong>${fechaFormateada}</strong></td>
-                <td style="padding: 10px; border-bottom: 1px solid #ecf0f1;">${corte.turno || 'Turno Único'}</td>
-                <td style="padding: 10px; border-bottom: 1px solid #ecf0f1; text-align: center;">${corte.tickets_emitidos}</td>
-                <td style="padding: 10px; border-bottom: 1px solid #ecf0f1; text-align: right; color: #27ae60;">$${parseFloat(corte.ventas_dia).toFixed(2)}</td>
-                <td style="padding: 10px; border-bottom: 1px solid #ecf0f1; text-align: right; font-weight: bold;">$${parseFloat(corte.total_esperado).toFixed(2)}</td>
-            `;
-            cuerpo.appendChild(tr);
-        });
-    } catch (error) {
-        console.error('Error al cargar historial de cortes:', error);
-    }
-}
+    $('form-compra').elements.id_producto.onchange = unitHints; $('form-movimiento').elements.id_producto.onchange = unitHints;
+    for (const [id, name, url, label, after] of [
+      ['form-compra', 'compra', '/compras', 'Compra de inventario', async () => { await loadProducts(); await Promise.all([loadPurchases(), loadSuppliers()]); }],
+      ['form-movimiento', 'movimiento', '/movimientos', 'Ajuste de inventario', async () => { await loadProducts(); await loadMovements(); }]
+    ]) $(id).onsubmit = event => {
+      event.preventDefault(); const form = event.currentTarget;
+      F.busy(form, async () => { await F.operation(name, url, fields(form), label); form.reset(); await after(); F.message('Movimiento registrado.', 'ok'); });
+    };
+    $('form-proveedor').onsubmit = event => { event.preventDefault(); const form = event.currentTarget; F.busy(form, async () => { await F.api('/proveedores', { method: 'POST', body: fields(form) }); form.reset(); await loadSuppliers(); F.message('Proveedor guardado.', 'ok'); }); };
+    $('filtrar-movimientos').onclick = () => loadMovements().catch(e => F.message(e.message));
+    $('form-reporte').onsubmit = event => { event.preventDefault(); F.busy(event.currentTarget, loadReport); };
+    $('cancelar-devolucion').onclick = () => $('dialog-devolucion').close();
+    $('form-devolucion').onsubmit = event => {
+      event.preventDefault(); const form = event.currentTarget;
+      F.busy(form, async () => { await F.operation('devolucion', `/ventas/${returnId}/devolver`, fields(form), 'Devolución de venta completa'); $('dialog-devolucion').close(); await loadReport(); F.message('Devolución registrada y existencias repuestas.', 'ok'); });
+    };
+    $('cancelar-usuario').onclick = resetUser;
+    formUser.onsubmit = event => {
+      event.preventDefault();
+      F.busy(formUser, async () => {
+        const body = fields(formUser), id = body.id; delete body.id; body.activo = formUser.elements.activo.checked;
+        await F.api('/usuarios' + (id ? '/' + encodeURIComponent(id) : ''), { method: id ? 'PUT' : 'POST', body });
+        if (id === user.id_usuario) { location.href = 'login.html'; return; }
+        resetUser(); await loadUsers(); F.message('Usuario guardado. Los cambios revocan sus sesiones anteriores.', 'ok');
+      });
+    };
+    $('exportar-inventario').onclick = () => csv(`inventario-${F.today()}.csv`, [['Clave', 'Producto', 'Unidad base', 'Precio', 'Costo', 'Existencia', 'Mínimo'], ...products.map(p => [p.codigo_interno, p.nombre, p.unidad_medida, p.precio, p.costo, p.stock, p.stock_minimo])]);
+    $('exportar-ventas').onclick = () => {
+      if (!report) return F.message('Consulta primero un periodo.');
+      csv(`ventas-${report.inicio}-${report.fin}.csv`, [['Tipo', 'Folio', 'Fecha', 'Responsable', 'Pago', 'Total', 'Costo', 'Utilidad', 'Estado / motivo'], ...report.ventas.map(s => ['Venta', s.folio || s.id, F.date(s.fecha_hora), s.nombre_usuario, s.metodo_pago, s.total, s.costo_total, s.utilidad, s.estado]), ...report.reembolsos.map(s => ['Devolución', s.folio, F.date(s.fecha_hora), s.nombre_usuario, s.metodo_pago, -s.total, s.costo_total == null ? '' : -s.costo_total, s.utilidad == null ? '' : -s.utilidad, s.motivo])]);
+    };
+    document.addEventListener('operacion-confirmada', () => { $('dialog-devolucion').close(); reload().catch(e => F.message(e.message)); });
+    window.addEventListener('storage', () => F.renderPending());
+    await reload();
+  } catch (error) { F.message(error.message); }
+})();

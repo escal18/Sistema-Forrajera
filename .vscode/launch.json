@@ -1,0 +1,16 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "type": "node",
+      "request": "launch",
+      "name": "Iniciar Caja y API",
+      "program": "${workspaceFolder}/backend-forrajera/index.js",
+      "cwd": "${workspaceFolder}/backend-forrajera",
+      "console": "integratedTerminal",
+      "skipFiles": [
+        "<node_internals>/**"
+      ]
+    }
+  ]
+}

@@ -1,74 +1,131 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="es">
 
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Caja de Cobro - Forrajera</title>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Caja · Forrajera</title>
     <link rel="stylesheet" href="style.css">
+    <script defer src="common.js"></script>
+    <script defer src="app.js"></script>
 </head>
 
 <body>
-    <div class="contenedor-principal">
-
-        <!-- Panel Izquierdo: Buscador y Ticket -->
-        <div class="panel-izquierdo">
-            <div class="seccion-buscador">
-                <input type="text" id="input-buscador" placeholder="Buscar producto por nombre o código (ej. Maíz)..."
-                    autocomplete="off">
-                <ul id="lista-resultados" class="oculto"></ul>
+    <header class="topbar"><a href="index.html" class="marca">F<span>Forrajera</span></a>
+        <nav class="top-actions"><span id="sesion-usuario" class="small"></span><a href="admin.html" data-admin
+                hidden>Administración</a><button id="salir" type="button">Salir</button></nav>
+    </header>
+    <main class="shell">
+        <div class="page-intro">
+            <div>
+                <p class="eyebrow">PUNTO DE VENTA</p>
+                <h1>Todo listo para atender</h1>
+                <p class="muted">Busca por nombre o clave. F2: buscar · F4: cobrar.</p>
+            </div><button id="actualizar" type="button">Actualizar catálogo</button>
+        </div>
+        <div id="mensaje" role="alert" hidden></div>
+        <div id="pendientes" aria-live="polite"></div>
+        <section class="card" id="abrir-turno" hidden>
+            <h2>Abre tu turno</h2>
+            <p class="muted">El fondo inicial es el efectivo que recibes antes de comenzar a vender.</p>
+            <form id="form-apertura" class="row"><label>Nombre del turno<input name="nombre" required maxlength="60"
+                        value="Turno"></label><label>Fondo inicial<input name="fondo" type="number" min="0"
+                        max="10000000" step="0.01" value="0" required></label><button class="primary"
+                    type="submit">Abrir turno</button></form>
+        </section>
+        <section class="card" id="turno-abierto" hidden>
+            <div class="section-head">
+                <h2 id="turno-nombre">Turno abierto</h2><span class="badge">En operación</span>
             </div>
-
-            <div class="seccion-ticket">
-                <table id="tabla-ticket">
+            <div class="stats" id="resumen-turno"></div>
+            <details>
+                <summary>Contar efectivo y cerrar turno</summary>
+                <form id="form-cierre">
+                    <div class="form-grid"><label>Efectivo contado<input name="contado" required type="number" min="0"
+                                max="10000000" step="0.01"></label><label>Observaciones<input name="observaciones"
+                                maxlength="500" placeholder="Explica cualquier diferencia"></label></div>
+                    <p id="diferencia-cierre" class="muted"></p><button class="danger" type="submit">Confirmar cierre de
+                        turno</button>
+                </form>
+            </details>
+        </section>
+        <div class="split">
+            <section class="card"><label for="input-buscador">Buscar producto</label><input id="input-buscador"
+                    class="search" type="search" autocomplete="off" placeholder="Ej. alfalfa, maíz o MAI40">
+                <p id="estado-busqueda" class="muted small" role="status"></p>
+                <div id="lista-resultados" class="results"></div>
+                <p class="eyebrow">PRODUCTOS FRECUENTES</p>
+                <div id="favoritos" class="favorites"></div>
+                <hr style="border:0;border-top:1px solid var(--line);margin:24px 0">
+                <div class="section-head">
+                    <h2>Venta actual</h2><button id="vaciar" type="button" class="link-button">Vaciar ticket</button>
+                </div>
+                <div class="table-wrap">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Producto / presentación</th>
+                                <th>Cantidad</th>
+                                <th>Precio</th>
+                                <th>Importe</th>
+                                <th></th>
+                            </tr>
+                        </thead>
+                        <tbody id="cuerpo-ticket"></tbody>
+                    </table>
+                </div>
+            </section>
+            <aside class="card summary"><span class="kicker">TOTAL A PAGAR</span>
+                <div id="total-venta" class="total">$0.00</div>
+                <form id="form-cobro"><label>Método de pago<select id="metodo-pago">
+                            <option>Efectivo</option>
+                            <option>Tarjeta</option>
+                        </select></label><label id="campo-pago">Pago recibido<input id="pago-con" type="number" min="0"
+                            max="10000000" step="0.01" placeholder="0.00"></label>
+                    <div class="row" style="justify-content:space-between;margin:20px 0"><span>Cambio</span><strong
+                            id="cambio-venta">$0.00</strong></div><button class="primary charge" id="btn-cobrar"
+                        type="submit" disabled>Confirmar cobro · F4</button>
+                </form>
+                <p class="muted small">El inventario se descuenta al confirmar la venta.</p>
+                <div id="ultima-venta" hidden>
+                    <hr>
+                    <h3>Última venta confirmada</h3>
+                    <p id="ultimo-folio" class="small" style="overflow-wrap:anywhere"></p>
+                    <p id="ultimo-total"></p><button id="imprimir" type="button">Imprimir ticket</button>
+                </div>
+            </aside>
+        </div>
+        <details class="card">
+            <summary>Mis últimas ventas</summary>
+            <p class="muted small">Puedes consultar y reimprimir tus últimos 200 tickets.</p><button
+                id="consultar-mis-ventas" type="button">Consultar mis ventas</button>
+            <div class="table-wrap">
+                <table>
                     <thead>
                         <tr>
-                            <th>Producto</th>
-                            <th>Cantidad</th>
-                            <th>Precio Unit.</th>
-                            <th>Subtotal</th>
-                            <th>Acción</th>
+                            <th>Folio / fecha</th>
+                            <th>Pago</th>
+                            <th>Total</th>
+                            <th>Estado</th>
+                            <th></th>
                         </tr>
                     </thead>
-                    <tbody id="cuerpo-ticket">
-                        <!-- Los artículos agregados aparecerán aquí mediante JS -->
-                    </tbody>
+                    <tbody id="mis-ventas"></tbody>
                 </table>
             </div>
-        </div>
-
-        <!-- Panel Derecho: Totales y Botón de Cobro -->
-        <div class="panel-derecho">
-            <h2>Total a Pagar</h2>
-            <div class="display-total">
-                $<span id="total-venta">0.00</span>
-            </div>
-
-            <div class="opciones-pago">
-                <label for="metodo-pago">Método de Pago:</label>
-                <select id="metodo-pago">
-                    <option value="Efectivo">Efectivo</option>
-                    <option value="Tarjeta">Tarjeta</option>
-                </select>
-            </div>
-
-            <!-- NUEVO BLOQUE: Cálculo de cambio -->
-            <div class="calculo-cambio" style="background: #f9f9f9; padding: 15px; border-radius: 4px; margin: 15px 0;">
-                <label style="display: block; font-weight: bold; margin-bottom: 5px;">Pago con:</label>
-                <input type="number" id="pago-con" step="0.50" min="0" placeholder="$0.00" style="width: 100%; padding: 10px; font-size: 1.2rem; margin-bottom: 10px;">
-                
-                <div style="display: flex; justify-content: space-between; align-items: center;">
-                    <span style="font-weight: bold; color: #555;">Cambio:</span>
-                    <h3 style="margin: 0; color: #d32f2f; font-size: 1.8rem;">$<span id="cambio-venta">0.00</span></h3>
-                </div>
-            </div>
-
-            <button id="btn-cobrar" class="btn-principal">Cobrar e Imprimir</button>
-        </div>
-
-    </div>
-
-    <script src="app.js"></script>
+        </details>
+        <details class="card">
+            <summary>Cambiar mi contraseña</summary>
+            <form id="form-password">
+                <div class="form-grid"><label>Contraseña actual<input name="actual" type="password"
+                            autocomplete="current-password" required maxlength="128"></label><label>Nueva
+                        contraseña<input name="nueva" type="password" autocomplete="new-password" required
+                            minlength="10" maxlength="128"></label></div><button type="submit">Guardar y volver a
+                    entrar</button>
+            </form>
+        </details>
+    </main>
+    <div id="ticket-impresion" class="print-only"></div>
 </body>
 
 </html>
