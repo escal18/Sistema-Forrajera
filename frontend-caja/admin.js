@@ -1,20 +1,28 @@
 const API_PRODUCTOS = 'http://localhost:3000/api/productos';
 const API_CORTES = 'http://localhost:3000/api/cortes/hoy';
 
-// Al cargar la página, traemos el catálogo inmediatamente
+// Al cargar la página, inicializamos los datos y recuperamos el fondo del turno
 document.addEventListener('DOMContentLoaded', () => {
+    // 1. Recuperar el fondo inicial guardado (Opción A: persiste para el turno/día)
+    if (localStorage.getItem('fondo_inicial')) {
+        document.getElementById('fondo-caja').value = localStorage.getItem('fondo_inicial');
+    }
+
     cargarCatalogo();
     actualizarCorte();
-    cargarHistorialVentas(); // <-- Nueva línea
-    etInterval(() => {
+    cargarHistorialVentas();
+    cargarHistorialCortes();
+
+    // Sincronización automática cada 5 segundos (Polling eficiente)
+    setInterval(() => {
         cargarCatalogo();
         actualizarCorte();
         cargarHistorialVentas();
-    }, 1000);
+    }, 5000);
 });
 
 // ==========================================
-// 1. Lógica del Corte de Caja Mejorado
+// 1. Lógica del Corte de Caja y Fondo Inicial
 // ==========================================
 const btnGenerarCorte = document.getElementById('btn-generar-corte');
 const inputFondoCaja = document.getElementById('fondo-caja');
@@ -22,12 +30,16 @@ const inputFondoCaja = document.getElementById('fondo-caja');
 btnGenerarCorte.addEventListener('click', () => {
     actualizarCorte();
     cargarHistorialVentas();
+    alert('Datos actualizados manualmente.');
 });
 
-// Hacer que el total esperado se recalcule si el admin cambia el fondo manualmente
-inputFondoCaja.addEventListener('input', calcularTotalCajon);
+// Guardar automáticamente el fondo en el navegador cada vez que se modifique
+inputFondoCaja.addEventListener('input', (e) => {
+    localStorage.setItem('fondo_inicial', e.target.value);
+    calcularTotalCajon();
+});
 
-// Variable global para guardar cuánto se vendió realmente
+// Variable global para guardar cuánto se vendió realmente en el turno
 let totalVentasDia = 0; 
 
 async function actualizarCorte() {
@@ -37,11 +49,11 @@ async function actualizarCorte() {
 
         document.getElementById('admin-tickets').textContent = corte.tickets_emitidos;
         
-        // Guardamos las ventas netas y las mostramos
+        // Guardamos las ventas netas del turno actual y las mostramos
         totalVentasDia = parseFloat(corte.total_esperado);
         document.getElementById('admin-ventas').textContent = `$${totalVentasDia.toFixed(2)}`;
 
-        // Calculamos la suma final
+        // Calculamos la suma final (Fondo + Ventas)
         calcularTotalCajon();
     } catch (error) {
         console.error('Error al obtener el corte:', error);
@@ -57,7 +69,6 @@ function calcularTotalCajon() {
 // ==========================================
 // 2. Lógica del Catálogo (CRUD)
 // ==========================================
-
 async function cargarCatalogo() {
     try {
         const respuesta = await fetch(API_PRODUCTOS);
@@ -78,14 +89,12 @@ async function cargarCatalogo() {
                     </span>
                 </td>
                 <td>
-                    <!-- Botón para Editar -->
                     <button class="btn-editar" style="padding: 5px 10px; background-color: #f39c12; color: white; border: none; border-radius: 3px; cursor: pointer;">
                         Editar
                     </button>
                 </td>
             `;
             
-            // Asignar el evento al botón de editar de esta fila
             const btnEditar = tr.querySelector('.btn-editar');
             btnEditar.addEventListener('click', () => cargarDatosEnFormulario(prod));
 
@@ -105,7 +114,6 @@ const inputId = document.getElementById('prod-id');
 const btnGuardarProd = document.getElementById('btn-guardar-prod');
 const btnCancelarEdicion = document.getElementById('btn-cancelar-edicion');
 
-// Función que llena el formulario con los datos del producto seleccionado
 function cargarDatosEnFormulario(producto) {
     inputId.value = producto.id_producto;
     document.getElementById('prod-codigo').value = producto.codigo_interno;
@@ -114,16 +122,12 @@ function cargarDatosEnFormulario(producto) {
     document.getElementById('prod-precio').value = producto.precio;
     document.getElementById('prod-stock').value = producto.stock;
 
-    // Cambiar la apariencia del formulario para que se note que es edición
     btnGuardarProd.textContent = 'Actualizar Producto';
     btnGuardarProd.style.backgroundColor = '#f39c12';
-    btnCancelarEdicion.classList.remove('oculto'); // Mostrar botón cancelar
-    
-    // Hacer scroll suave hacia arriba para que el usuario vea el formulario
+    btnCancelarEdicion.classList.remove('oculto');
     window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
-// Función para limpiar el formulario y salir del modo edición
 function resetearFormulario() {
     formProducto.reset();
     inputId.value = '';
@@ -137,7 +141,6 @@ btnCancelarEdicion.addEventListener('click', resetearFormulario);
 formProducto.addEventListener('submit', async (e) => {
     e.preventDefault(); 
 
-    // Extraemos los datos del formulario
     const datosProducto = {
         codigo_interno: document.getElementById('prod-codigo').value.toUpperCase(),
         nombre: document.getElementById('prod-nombre').value,
@@ -147,8 +150,6 @@ formProducto.addEventListener('submit', async (e) => {
     };
 
     const idEdicion = inputId.value;
-    
-    // Si idEdicion tiene algo, hacemos PUT (Actualizar), si está vacío hacemos POST (Crear)
     const metodoHttp = idEdicion ? 'PUT' : 'POST';
     const urlEndpoint = idEdicion ? `${API_PRODUCTOS}/${idEdicion}` : API_PRODUCTOS;
 
@@ -162,7 +163,7 @@ formProducto.addEventListener('submit', async (e) => {
         if (respuesta.ok) {
             alert(idEdicion ? 'Producto actualizado correctamente' : 'Producto agregado exitosamente');
             resetearFormulario();
-            cargarCatalogo(); // Recargamos la tabla
+            cargarCatalogo();
         } else {
             const error = await respuesta.json();
             alert(`Error: ${error.error}`);
@@ -174,7 +175,7 @@ formProducto.addEventListener('submit', async (e) => {
 });
 
 // ==========================================
-// 4.Cargar Historial de Ventas
+// 4. Cargar Historial de Ventas
 // ==========================================
 async function cargarHistorialVentas() {
     try {
@@ -185,7 +186,6 @@ async function cargarHistorialVentas() {
         cuerpoVentas.innerHTML = '';
 
         ventas.forEach(venta => {
-            // Extraer solo la hora (HH:MM) de la fecha_hora
             const horaVenta = new Date(venta.fecha_hora).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
             
             const tr = document.createElement('tr');
@@ -218,7 +218,6 @@ btnBuscarReporte.addEventListener('click', async () => {
     }
 
     try {
-        // Hacemos fetch al nuevo endpoint enviando las fechas por la URL
         const respuesta = await fetch(`http://localhost:3000/api/ventas/reportes?inicio=${inicio}&fin=${fin}`);
         const ventas = await respuesta.json();
         
@@ -226,7 +225,6 @@ btnBuscarReporte.addEventListener('click', async () => {
         cuerpoReportes.innerHTML = '';
         let totalPeriodo = 0;
 
-        // Si no hay ventas en esas fechas
         if (ventas.length === 0) {
             cuerpoReportes.innerHTML = `
                 <tr>
@@ -238,11 +236,8 @@ btnBuscarReporte.addEventListener('click', async () => {
             return;
         }
 
-        // Si hay ventas, creamos la tabla y vamos sumando el total
         ventas.forEach(venta => {
             totalPeriodo += parseFloat(venta.total);
-            
-            // Formatear para que se vea el día, mes y año junto con la hora
             const fechaCompleta = new Date(venta.fecha_hora).toLocaleString();
             
             const tr = document.createElement('tr');
@@ -257,7 +252,6 @@ btnBuscarReporte.addEventListener('click', async () => {
             cuerpoReportes.appendChild(tr);
         });
 
-        // Actualizamos el número verde grande con la ganancia de esos días
         document.getElementById('total-reporte').textContent = `$${totalPeriodo.toFixed(2)}`;
 
     } catch (error) {
@@ -265,3 +259,88 @@ btnBuscarReporte.addEventListener('click', async () => {
         alert('Hubo un problema al generar el reporte.');
     }
 });
+
+// ==========================================
+// 6. Lógica para Guardar Turno y Ver Historial
+// ==========================================
+const btnGuardarCorte = document.getElementById('btn-guardar-corte');
+
+btnGuardarCorte.addEventListener('click', async () => {
+    const fondo = parseFloat(document.getElementById('fondo-caja').value) || 0;
+    const tickets = document.getElementById('admin-tickets').textContent;
+    const ventas = totalVentasDia; 
+    const totalCajon = ventas + fondo;
+
+    if (ventas === 0) {
+        alert('No hay ventas registradas en este turno para cortar.');
+        return;
+    }
+
+    const turnoActual = prompt('¿Qué turno estás cerrando? (Ej. Turno Mañana, Turno Tarde):', 'Turno Mañana');
+    if (!turnoActual) return;
+
+    if (!confirm(`¿Cerrar ${turnoActual} con ventas por $${ventas.toFixed(2)} y dejar la caja lista para el siguiente turno?`)) {
+        return;
+    }
+
+    try {
+        const respuesta = await fetch('http://localhost:3000/api/cortes', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                fondo_inicial: fondo,
+                ventas_dia: ventas,
+                total_esperado: totalCajon,
+                tickets_emitidos: parseInt(tickets),
+                turno: turnoActual
+            })
+        });
+
+        if (respuesta.ok) {
+            alert(`¡${turnoActual} guardado con éxito! La pantalla se ha reiniciado para el siguiente turno.`);
+            
+            // Reiniciamos los contadores visuales locales
+            totalVentasDia = 0;
+            document.getElementById('admin-ventas').textContent = '$0.00';
+            document.getElementById('admin-tickets').textContent = '0';
+            calcularTotalCajon();
+            
+            cargarHistorialCortes();
+        } else {
+            alert('Error al guardar el corte de turno.');
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        alert('Error de conexión con el servidor.');
+    }
+});
+
+async function cargarHistorialCortes() {
+    try {
+        const respuesta = await fetch('http://localhost:3000/api/cortes/historial');
+        const historial = await respuesta.json();
+        
+        const cuerpo = document.getElementById('cuerpo-historial-cortes');
+        cuerpo.innerHTML = '';
+
+        if (historial.length === 0) {
+            cuerpo.innerHTML = `<tr><td colspan="5" style="text-align: center; padding: 15px; color: #7f8c8d;">No hay cortes guardados todavía.</td></tr>`;
+            return;
+        }
+
+        historial.forEach(corte => {
+            const fechaFormateada = new Date(corte.fecha).toLocaleDateString();
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td style="padding: 10px; border-bottom: 1px solid #ecf0f1;"><strong>${fechaFormateada}</strong></td>
+                <td style="padding: 10px; border-bottom: 1px solid #ecf0f1;">${corte.turno || 'Turno Único'}</td>
+                <td style="padding: 10px; border-bottom: 1px solid #ecf0f1; text-align: center;">${corte.tickets_emitidos}</td>
+                <td style="padding: 10px; border-bottom: 1px solid #ecf0f1; text-align: right; color: #27ae60;">$${parseFloat(corte.ventas_dia).toFixed(2)}</td>
+                <td style="padding: 10px; border-bottom: 1px solid #ecf0f1; text-align: right; font-weight: bold;">$${parseFloat(corte.total_esperado).toFixed(2)}</td>
+            `;
+            cuerpo.appendChild(tr);
+        });
+    } catch (error) {
+        console.error('Error al cargar historial de cortes:', error);
+    }
+}

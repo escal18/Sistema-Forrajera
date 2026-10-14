@@ -44,6 +44,47 @@
                 </div>
                 <button id="btn-generar-corte" class="btn-principal" style="width: 100%; margin-top: 20px;">Actualizar
                     Datos</button>
+
+                <!-- Botón para guardar el corte actual -->
+                <button id="btn-guardar-corte" class="btn-principal"
+                    style="margin-top: 10px; background-color: #27ae60;">
+                    Guardar Corte del Día / Turno
+                </button>
+
+                <!-- SECCIÓN NUEVA: Historial de Cortes Guardados -->
+                <div class="tarjeta-admin" style="margin-top: 20px;">
+                    <h2>Historial de Cortes de Turnos (Semana / Mes)</h2>
+                    <div style="overflow-y: auto; max-height: 300px;">
+                        <table id="tabla-historial-cortes" style="width: 100%; border-collapse: collapse;">
+                            <thead>
+                                <tr>
+                                    <th
+                                        style="background-color: #34495e; color: white; padding: 10px; text-align: left;">
+                                        Fecha</th>
+                                    <th
+                                        style="background-color: #34495e; color: white; padding: 10px; text-align: left;">
+                                        Turno</th>
+                                    <th
+                                        style="background-color: #34495e; color: white; padding: 10px; text-align: center;">
+                                        Tickets</th>
+                                    <th
+                                        style="background-color: #34495e; color: white; padding: 10px; text-align: right;">
+                                        Ventas</th>
+                                    <th
+                                        style="background-color: #34495e; color: white; padding: 10px; text-align: right;">
+                                        Total en Cajón</th>
+                                </tr>
+                            </thead>
+                            <tbody id="cuerpo-historial-cortes">
+                                <tr>
+                                    <td colspan="5" style="text-align: center; padding: 20px; color: #7f8c8d;">
+                                        Cargando historial de cortes...
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
             </div>
 
             <div class="tarjeta-admin">
